@@ -22,3 +22,7 @@ scanning the HP in the validation samples
 
 * Some notes here https://blog.floydhub.com/guide-to-hyperparameters-search-for-deep-learning-models/
 * Other notes here https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.RandomizedSearchCV.html
+
+**Notes on don't overfit** 
+
+* https://www.kaggle.com/rafjaa/dealing-with-very-small-datasets 
