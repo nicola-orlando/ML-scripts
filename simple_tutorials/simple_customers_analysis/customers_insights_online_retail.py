@@ -50,7 +50,7 @@ def get_grouped_average(dataframe,grouping_feature,manipulated_data):
     return grouped_data
 
 def get_grouped_average_multiplied(dataframe,grouping_feature,manipulated_data,manipulated_data_second):
-    dataframe['ValueM'] = manipulated_data * manipulated_data_second
+    dataframe['ValueM'] = manipulated_data.abs() * manipulated_data_second.abs()
     grouped_data = dataframe.groupby(grouping_feature)['ValueM'].mean().reset_index(name='ValueM')
     return grouped_data
 
@@ -59,7 +59,7 @@ def get_grouped_sum(dataframe,grouping_feature,manipulated_data):
     return grouped_data
 
 def get_grouped_sum_multiplied(dataframe,grouping_feature,manipulated_data,manipulated_data_second):
-    dataframe['ValueM'] = manipulated_data * manipulated_data_second
+    dataframe['ValueM'] = manipulated_data.abs() * manipulated_data_second.abs()
     grouped_data = dataframe.groupby(grouping_feature)['ValueM'].sum().reset_index(name='ValueM')
     return grouped_data
 
@@ -206,16 +206,10 @@ grouped_data_user_descriptions = get_grouped_data(df,'Customer ID','Description'
 
 # Now obtain dataframe with first, second, third most frequent words
 dataframe_first_ranked_words = add_most_common_words(grouped_data_user_descriptions,1,'first_ranked_words')
-dataframe_second_ranked_words = add_most_common_words(grouped_data_user_descriptions,2,'second_ranked_words')
-dataframe_third_ranked_words = add_most_common_words(grouped_data_user_descriptions,3,'third_ranked_words')
 
 # Ideally here I'd try to get rid of words which are not useful (e.g., 'of', 'and', ..)
-print('\nTop-10 first top ranked words across all customers')
-first_list = get_most_common_words(dataframe_first_ranked_words.first_ranked_words,10)
-print('\nTop-10 second top ranked words across all customers')
-second_list = get_most_common_words(dataframe_second_ranked_words.second_ranked_words,10)
-print('\nTop-10 third top ranked words across all customers')
-third_list = get_most_common_words(dataframe_third_ranked_words.third_ranked_words,10)
+print('\nTop-15 first top ranked words across all customers')
+first_list = get_most_common_words(dataframe_first_ranked_words.first_ranked_words,15)
 
 print('\n Ending: Split the customers into groups according to their purchase patterns and product purchases, and characterize/quantify the obtained customer personas \n _____________ \n')
 
@@ -236,7 +230,6 @@ def cutstomer_churn_data(dataframe,grouping_feature):
 
 
 dataframe_customers_churn = cutstomer_churn_data(df,'Invoice')
-print(dataframe_customers_churn.head(-1))
 # Convert InvoiceDate to numeric and perform selection on dataset to split it in first and second half year invoices. 
 # Alternative solution .apply(pd.to_numeric) 
 # Customers in first six months 
