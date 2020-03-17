@@ -26,7 +26,7 @@ tf.set_random_seed(123)
 # Load data
 # Need to enforce encoding as described here https://stackoverflow.com/questions/18171739/unicodedecodeerror-when-reading-csv-file-in-pandas-with-python 
 df = pd.read_csv('online_retail_II_2011.csv', engine='python')
-# Here I want to clean up some information from the InvoiceDate column (don't plan to use time and year, just day and month)
+# Here I want to clean up some information from the InvoiceDate column (don't plan to use time day, just year and month)
 df['InvoiceDate'] = df['InvoiceDate'].str.slice(3, -6)
 
 print("Prining head of the file to see how it looks")
@@ -108,7 +108,6 @@ counting_users_per_country = get_counting(df,'Country','Customer ID','Customers 
 # Counts of oderes per day
 counting_users_per_month = get_counting(df,'InvoiceDate','Invoice','Invoices per month') 
 
-
 # Plotting (simple plots). 
 
 # Based on what can be seen here http://queirozf.com/entries/pandas-dataframe-plot-examples-with-matplotlib-pyplot
@@ -134,7 +133,6 @@ def make_density_plot_hist(dataframe_feature,is_density,feature_to_plot,n_bins,p
         plt.grid(True)
     plt.show()
     plt.savefig(plot_title)
-
 
 print('\n Starting EDA \n _____________ \n')
 
@@ -183,9 +181,7 @@ counting_purchases_per_user_vs_time = get_counting(df,['Country','InvoiceDate','
 #print(average_items_price_country_vs_time.head())
 #print(counting_purchases_per_user_vs_time.head())
 
-
 print('\n Ending EDA \n _____________ \n')
-
 
 print('\n Starting: Split the customers into groups according to their purchase patterns and product purchases, and characterize/quantify the obtained customer personas \n _____________ \n')
 
@@ -227,7 +223,6 @@ def cutstomer_churn_data(dataframe,grouping_feature):
     grouped_data = grouped_data.drop(['Description', 'Quantity','StockCode','Price','Country'], axis=1)
     grouped_data = grouped_data.groupby(['Invoice'], as_index=False).agg({'InvoiceDate': 'first', 'Customer ID': 'first'})
     return grouped_data
-
 
 dataframe_customers_churn = cutstomer_churn_data(df,'Invoice')
 # Convert InvoiceDate to numeric and perform selection on dataset to split it in first and second half year invoices. 
@@ -290,7 +285,6 @@ def add_churn_value_loop(dataframe,customers):
                 dataframe_out['Churned'] = 1.
             else : 
                 dataframe_out['Churned'] = 0.
-
 
 def add_churn_value(x,churned_customers):
     for index, row in df.iterrows():
