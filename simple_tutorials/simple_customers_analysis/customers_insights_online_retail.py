@@ -9,9 +9,10 @@ import tensorflow as tf
 tf.enable_eager_execution()
 
 import pandas as pd
+import csv
 
 import matplotlib.pyplot as plt
-import csv
+import matplotlib.ticker as ticker
 
 from collections import Counter 
 
@@ -26,7 +27,7 @@ tf.set_random_seed(123)
 # Load data
 # Need to enforce encoding as described here https://stackoverflow.com/questions/18171739/unicodedecodeerror-when-reading-csv-file-in-pandas-with-python 
 df = pd.read_csv('online_retail_II_2011.csv', engine='python')
-# Here I want to clean up some information from the InvoiceDate column (don't plan to use time day, just year and month)
+# Here I want to clean up some information from the InvoiceDate column (don't plan to use time and year, just day and month)
 df['InvoiceDate'] = df['InvoiceDate'].str.slice(3, -6)
 
 print("Prining head of the file to see how it looks")
@@ -65,6 +66,10 @@ def get_grouped_sum_multiplied(dataframe,grouping_feature,manipulated_data,manip
 
 def get_counting(dataframe,grouping_feature,manipulated_feature,title='count'): 
     grouped_data = dataframe.groupby(grouping_feature)[manipulated_feature].count().reset_index(name=title)
+    return grouped_data
+
+def group_two_columns(dataframe,first_feature,second_feature,manipulated_data,title): 
+    grouped_data = dataframe.groupby([first_feature,second_feature])[manipulated_data].sum().reset_index(name=title)
     return grouped_data
 
 # Per item averages
@@ -108,21 +113,23 @@ counting_users_per_country = get_counting(df,'Country','Customer ID','Customers 
 # Counts of oderes per day
 counting_users_per_month = get_counting(df,'InvoiceDate','Invoice','Invoices per month') 
 
+
 # Plotting (simple plots). 
 
 # Based on what can be seen here http://queirozf.com/entries/pandas-dataframe-plot-examples-with-matplotlib-pyplot
 def make_chart_plot(dataframe,x_axis_name,do_log_y,lines_coord,plot_title,plot_kind): 
-    dataframe.plot(kind=plot_kind,x=x_axis_name,logy=do_log_y)
+    dataframe.plot(kind=plot_kind,x=x_axis_name,logy=do_log_y,color='skyblue',lw=0.5,ec='black')
     plt.axhline(y=10,color='gray',linestyle='--',linewidth=0.5)
     for line in lines_coord : 
         plt.axhline(y=line,color='gray',linestyle='--',linewidth=0.5)
     plt.show()
     plt.tight_layout()
     plt.savefig(plot_title)
+    plt.clf()
+    plt.close()
 
 def make_density_plot_hist(dataframe_feature,is_density,feature_to_plot,n_bins,plot_title,range_plot,is_log_x,is_log_y,x_axis_name,y_axis_name,is_grid):
-    #dataframe[feature_to_plot].plot.hist(bins=n_bins)
-    dataframe_feature.plot.hist(bins=n_bins,density=is_density,range=range_plot)
+    dataframe_feature.plot.hist(bins=n_bins,density=is_density,range=range_plot,color='skyblue',lw=0.5,ec='black')
     if is_log_x: 
         plt.xscale('log')
     if is_log_y:
@@ -133,6 +140,26 @@ def make_density_plot_hist(dataframe_feature,is_density,feature_to_plot,n_bins,p
         plt.grid(True)
     plt.show()
     plt.savefig(plot_title)
+    plt.clf()
+    plt.close()
+
+# Reference https://chrisalbon.com/python/data_visualization/matplotlib_scatterplot_from_pandas/
+def make_scatter_plot(dataframe,first_feature,second_feature,third_feature,z_value,plot_title,scaling_factor): 
+    tick_size=8
+    colors = np.random.rand(298)
+    dataframe[z_value]=scaling_factor*dataframe[z_value].astype(float)
+    ax = plt.axes()
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(tick_size) 
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(tick_size) 
+    plt.scatter(first_feature,second_feature,dataframe.ValueM,alpha=0.5,c=colors,lw=0.0)
+    plt.xticks(rotation=90)
+    plt.show()
+    plt.tight_layout()
+    plt.savefig(plot_title)
+    plt.clf()
+    plt.close()
 
 print('\n Starting EDA \n _____________ \n')
 
@@ -172,16 +199,29 @@ make_chart_plot(counting_users_per_country,'Country',True,[10,100,1000,10000,100
 make_chart_plot(counting_users_per_month,'InvoiceDate',False,[10000,20000,30000,40000,50000,60000,70000],'users_per_month.png','bar')
 
 # Grouping by multiple columns for scatter plots  
-counting_purchases_per_user_vs_time = get_counting(df,['Country','InvoiceDate'],'Invoice') 
+counting_purchases_per_country_vs_time = get_counting(df,['Country','InvoiceDate'],'Invoice') 
 sum_items_price_country_vs_time = get_grouped_sum_multiplied(df,['Country','InvoiceDate'],df.Price,df.Quantity)
 average_items_price_country_vs_time = get_grouped_average_multiplied(df,['Country','InvoiceDate'],df.Price,df.Quantity)
-counting_purchases_per_user_vs_time = get_counting(df,['Country','InvoiceDate','StockCode'],'Invoice') 
-#print(counting_purchases_per_user_vs_time.head())
-#print(sum_items_price_country_vs_time.head())
-#print(average_items_price_country_vs_time.head())
-#print(counting_purchases_per_user_vs_time.head())
+
+counting_purchases_per_country_vs_time_grouped = group_two_columns(counting_purchases_per_country_vs_time,'Country','InvoiceDate','count','ValueM')
+sum_items_price_country_vs_time_grouped = group_two_columns(sum_items_price_country_vs_time,'Country','InvoiceDate','ValueM','ValueM')
+average_items_price_country_vs_time_grouped = group_two_columns(sum_items_price_country_vs_time,'Country','InvoiceDate','ValueM','ValueM')
+
+print(counting_purchases_per_country_vs_time.head())
+print(sum_items_price_country_vs_time.head())
+print(average_items_price_country_vs_time.head())
+
+print(counting_purchases_per_country_vs_time_grouped.head())
+print(sum_items_price_country_vs_time_grouped.head())
+print(average_items_price_country_vs_time_grouped.head())
+
+make_scatter_plot(counting_purchases_per_country_vs_time_grouped,counting_purchases_per_country_vs_time_grouped.InvoiceDate,counting_purchases_per_country_vs_time_grouped.Country,counting_purchases_per_country_vs_time_grouped.ValueM,'ValueM','counting_purchases_per_country_vs_time_grouped.png',0.04)
+make_scatter_plot(sum_items_price_country_vs_time_grouped,sum_items_price_country_vs_time_grouped.InvoiceDate,sum_items_price_country_vs_time_grouped.Country,sum_items_price_country_vs_time_grouped.ValueM,'ValueM',"sum_items_price_country_vs_time_grouped.png",0.0011)
+make_scatter_plot(average_items_price_country_vs_time_grouped,average_items_price_country_vs_time_grouped.InvoiceDate,average_items_price_country_vs_time_grouped.Country,average_items_price_country_vs_time_grouped.ValueM,'ValueM',"average_items_price_country_vs_time_grouped.png",0.0011)
+
 
 print('\n Ending EDA \n _____________ \n')
+
 
 print('\n Starting: Split the customers into groups according to their purchase patterns and product purchases, and characterize/quantify the obtained customer personas \n _____________ \n')
 
@@ -224,6 +264,7 @@ def cutstomer_churn_data(dataframe,grouping_feature):
     grouped_data = grouped_data.groupby(['Invoice'], as_index=False).agg({'InvoiceDate': 'first', 'Customer ID': 'first'})
     return grouped_data
 
+
 dataframe_customers_churn = cutstomer_churn_data(df,'Invoice')
 # Convert InvoiceDate to numeric and perform selection on dataset to split it in first and second half year invoices. 
 # Alternative solution .apply(pd.to_numeric) 
@@ -251,7 +292,11 @@ def unique(list1):
     return unique_list
 
 cust_2011_first_unq=unique(cust_2011_first)
+print('Numer of customers in first half od 2011')
+print(len(cust_2011_first_unq))
 cust_2011_second_unq=unique(cust_2011_second)
+print('Numer of customers in second half od 2011')
+print(len(cust_2011_second_unq))
 
 # Return elements missing in list 2 from list 1
 def missing_elements(list1,list2):
@@ -270,8 +315,10 @@ def missing_elements(list1,list2):
     return missing_element_list 
 
 churned_customers = missing_elements(cust_2011_first_unq,cust_2011_second_unq)
+churned_customers_unique = unique(churned_customers)
 print('Churned customers')
-print(churned_customers)
+print(len(churned_customers_unique))
+print(churned_customers_unique)
 
 # Now that we have the missing elements we need add in the dataframe a customers churn data value in order to characterise them. 
 # Use again a loop solution, maybe there is a better way
@@ -285,6 +332,7 @@ def add_churn_value_loop(dataframe,customers):
                 dataframe_out['Churned'] = 1.
             else : 
                 dataframe_out['Churned'] = 0.
+
 
 def add_churn_value(x,churned_customers):
     for index, row in df.iterrows():
