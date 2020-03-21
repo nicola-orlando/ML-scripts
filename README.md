@@ -16,7 +16,7 @@ Dataset http://archive.ics.uci.edu/ml/datasets/Online+Retail+II | Folder simple_
 
 * customers_insights_online_retail.py | contains all relevant functins for plotting and dataframe manipulation 
 
-## Low statisitcs customers 
+## Low statisitcs challenge 
 
 Dataset on kaggle https://www.kaggle.com/c/dont-overfit-ii/overview | Folder https://github.com/nicola-orlando/tensorflow/tree/master/simple_tutorials/dont_overfit_comp_kaggle 
 
