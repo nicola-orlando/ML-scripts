@@ -4,6 +4,7 @@
 # Class in TensorFlow https://www.tensorflow.org/api_docs/python/tf/estimator/BoostedTreesClassifier 
 # [1] https://www.tensorflow.org/tensorboard/hyperparameter_tuning_with_hparams
 # [2] https://www.tensorflow.org/datasets/splits
+# [3] https://stackoverflow.com/questions/40729162/merging-results-from-model-predict-with-original-pandas-dataframe
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
@@ -19,12 +20,13 @@ from keras.models import Model
 from scipy.stats import uniform
 
 import pandas as pd
-
-# HP scan
+ 
 from sklearn.model_selection import RandomizedSearchCV
-
-# Logistic regression model 
 from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC
+from sklearn import linear_model
+
+from sklearn.model_selection import RepeatedKFold
 
 # Remove verbose warnings 
 from warnings import simplefilter
@@ -32,16 +34,8 @@ from warnings import simplefilter
 simplefilter(action='ignore', category=FutureWarning)
 simplefilter(action='ignore', category=DeprecationWarning)
 
-#metric = 'accuracy'
-
-# Function used to store the log files of each run, taken from Ref [1] 
-#with tf.summary.create_file_writer('logs/hparam_tuning').as_default():
-#  hp.hparams_config(
-#    hparams=[hp_scan_n_batches_per_layer, hp_scan_n_trees, hp_scan_max_depth, hp_scan_learning_rate, hp_scan_l1_regularization, 
-#             hp_scan_l2_regularization, hp_scan_tree_complexity, hp_scan_min_node_weight, hp_scan_center_bias, hp_scan_pruning_mode, 
-#             hp_scan_quantile_sketch_epsilon],
-#    metrics=[hp.Metric(metric, display_name='Accuracy')],
-#  )
+# Configuration of the job, to be parsed from command line eventually
+number_of_folds=10
 
 # PART 1 design the dataset handling for 10-fold cross training
 # Now it's time to run, before then, split the dataset accroding to the cross training granularity we want to use 
@@ -50,41 +44,21 @@ simplefilter(action='ignore', category=DeprecationWarning)
 # My data after downloading will be here /afs/cern.ch/user/o/orlando/.keras/datasets/
 # For now hard coded grabbing 
 # Data header: id,target,features[0-299]
-print("Load the dataset ...\n")
+print("Load the dataset ...")
 train_file_path = "/afs/cern.ch/user/o/orlando/.keras/datasets/dont-overfit-ii/train.csv"
 dftrain = pd.read_csv(train_file_path)
 # Dropping from the dataset the uninteresting index
 dftrain = dftrain.drop('id', 1)
 
 # Look at the dataset structure
-print("Looking at the input data ...\n")
+print("Looking at the input data ...")
 print(dftrain.head())
 print(dftrain.describe())
 
-# Build the input function, used for DecisionTreesClassifier 
-def make_input_fn(X, y, n_epochs=None, shuffle=True):
-  def input_fn():
-    dataset = tf.data.Dataset.from_tensor_slices((dict(X), y))
-    if shuffle:
-      dataset = dataset.shuffle(NUM_EXAMPLES)
-    # For training, cycle through dataset as many times as need (n_epochs=None).                                                                           
-    dataset = dataset.repeat(n_epochs)
-    # In memory training doesn't use batching.                                                                                                             
-    dataset = dataset.batch(NUM_EXAMPLES)
-    return dataset
-  return input_fn
-
-# Now we need to split the data, and call the runner for training/evaluating the model from the splitting look  
-import numpy as np
-from sklearn.model_selection import RepeatedKFold
-X = dftrain.to_numpy()
-
-
 # PART 2 design the functions used to handle the HP scan and run functionalites
-# ____________________________________________
 
 # Train a logistic regression model performing an HP scan, print the best found HP set and return a model having the best found HP setting 
-def train_validate_model_logreg(X,y):
+def train_validate_model_logreg(X_train,y_train,X_test,y_test,full_dataframe,print_verbose=False):
   print("Training a Logistic Regression model")
   logistic = LogisticRegression(solver='saga', tol=0.01, max_iter=200,random_state=0)
   #Some HP combinations not necessarily available
@@ -94,41 +68,69 @@ def train_validate_model_logreg(X,y):
                     fit_intercept=[True,False],
                     solver=['liblinear', 'saga'],
                     max_iter=uniform(loc=50, scale=200) )
-  clf = RandomizedSearchCV(logistic, hp_setting, random_state=0)
-  search = clf.fit(X,y)
-  ypredicts=search.predict(X)
-  print('Best hp setting')
-  print(search.best_params_)
-  logistic_return = LogisticRegression()
-  logistic_return.set_params(**search.best_params_)
+  clf = RandomizedSearchCV(logistic,hp_setting,random_state=0)
+  search = clf.fit(X_train,y_train)
+  scores_train_prediction=search.predict(X_train)
+  if print_verbose :
+    print('Best hp setting')
+    print(search.best_params_)
+    print('Printing predictions')
+    print(scores_train_predictions)
+    print('Printing random search results')
+    print(search.cv_results_)
+  score_predictions = search.predict(X_test)
+  dataframe_with_scores = pd.DataFrame(data = score_predictions, columns = ['score_predictions_logistic'], index = X_test.index.copy())
+  output_dataframe = pd.merge(full_dataframe, dataframe_with_scores, how = 'left', left_index = True, right_index = True)
+  return output_dataframe
 
-  print('Printing predictions')
-  print(ypredicts)
-  print('Printing random search results')
-  print(search.cv_results_)
-  #print('Output model')
-  #print(logistic_return)
-  return logistic_return
-
-def train_validate_model_svm(X,y):
-    print("\nTraining a SVM model ...")
+def train_validate_model_svm(X_train,y_train,X_test,y_test,full_dataframe,print_verbose=False):
+    print("Training a SVM model")
     svm = LinearSVC(random_state=0, tol=1e-5)
     # HP setting 
-    hp_setting = dict(penalty=['l2', 'l1'],
+    hp_setting = dict(penalty=['l2'],
                       loss=['hinge', 'squared_hinge'],
-                      dual=[True, False],
+                      dual=[True],
                       tol=uniform(loc=0, scale=3),
                       C=uniform(loc=0, scale=4),
                       fit_intercept=[True, False],
                       intercept_scaling=uniform(loc=0, scale=3),
                       max_iter=uniform(loc=50, scale=200))
+    clf = RandomizedSearchCV(svm,hp_setting,random_state=0)
+    search = clf.fit(X_train,y_train)
+    scores_train_prediction=search.predict(X_train)
+    if print_verbose :
+      print('Best hp setting')
+      print(search.best_params_)
+      print('Printing predictions')
+      print(scores_train_predictions)
+      print('Printing random search results')
+      print(search.cv_results_)
+    score_predictions = search.predict(X_test)
+    dataframe_with_scores = pd.DataFrame(data = score_predictions, columns = ['score_predictions_svm'], index = X_test.index.copy())
+    output_dataframe = pd.merge(full_dataframe, dataframe_with_scores, how = 'left', left_index = True, right_index = True)
+    return output_dataframe
+
+def train_bayesian_rdge(X_train,y_train,X_test,y_test,full_dataframe,print_verbose=False):
+  print("Training a Bayesian model")
+  bayesian_model = linear_model.BayesianRidge()
+  bayesian_model.fit(X_train,y_train)
+  score_predictions = bayesian_model.predict(X_test)
+  dataframe_with_scores = pd.DataFrame(data = score_predictions, columns = ['score_predictions_bayes'], index = X_test.index.copy())
+  output_dataframe = pd.merge(full_dataframe, dataframe_with_scores, how = 'left', left_index = True, right_index = True)
+  return output_dataframe
+
+# Now we need to split the data, and call the runner for training/evaluating the model from the splitting look  
+X = dftrain.to_numpy()
 
 random_state = 12883823
 # See documentation here https://scikit-learn.org/stable/modules/cross_validation.html
 # Here for the predict function https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_val_predict.html#sklearn.model_selection.cross_val_predict
 
 fold_count=0
-repeated_k_fold = RepeatedKFold(n_splits=10, n_repeats=1, random_state=random_state)
+dataframes_with_logreg_scores=[]
+dataframes_with_svm_scores=[]
+dataframes_with_bayes_scores=[]
+repeated_k_fold = RepeatedKFold(n_splits=number_of_folds, n_repeats=1, random_state=random_state)
 for train_index, test_index in repeated_k_fold.split(X):
   fold_count+=1
   print("Processing fold count ",fold_count)
@@ -141,89 +143,53 @@ for train_index, test_index in repeated_k_fold.split(X):
     feature_columns.append(fc.numeric_column(str(index),dtype=tf.float32))
 
   # Converting to dataframe
-  dataframe_from_numpy_train = pd.DataFrame(dftrain,    # values
-                                            index=train_index,    # 1st column as index
-                                            columns=list(dftrain.columns.values))
+  # values, 1st column as index
+  dataframe_from_numpy_train = pd.DataFrame(dftrain,index=train_index,columns=list(dftrain.columns.values))
+  dataframe_from_numpy_test = pd.DataFrame(dftrain,index=test_index,columns=list(dftrain.columns.values))
   
   # Pickup the target column 
   y_train = dataframe_from_numpy_train.pop('target')
+  y_test = dataframe_from_numpy_test.pop('target')
   
-  logistic_best_model = train_validate_model_logreg(dataframe_from_numpy_train,y_train)
-  print('Printing now best model pars as obtained from the function')
-  print(logistic_best_model.get_params)
-  
-  predictions = logistic_best_model.predict(dataframe_from_numpy_train)
+  dataframe_with_logreg_scores = train_validate_model_logreg(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain)
+  dataframe_with_svm_scores = train_validate_model_svm(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain)
+  dataframe_with_bayes_scores = train_bayesian_rdge(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain)
 
-  #score = model.score(x_test, y_test)
-  #print(score)
-  df['predictions'] = predictions
+  dataframes_with_logreg_scores.append(dataframe_with_logreg_scores)
+  dataframes_with_svm_scores.append(dataframe_with_svm_scores)
+  dataframes_with_bayes_scores.append(dataframe_with_bayes_scores)
 
 
+combined_dataframe_with_logreg_scores = dataframes_with_logreg_scores[0]
+combined_dataframe_with_svm_scores = dataframes_with_svm_scores[0]
+combined_dataframe_with_bayes_scores = dataframes_with_bayes_scores[0]
+
+for element in range(0,number_of_folds-1):
+    combined_dataframe_with_logreg_scores['score_predictions_logistic'] = combined_dataframe_with_logreg_scores['score_predictions_logistic'].combine_first(dataframes_with_logreg_scores[element+1]['score_predictions_logistic'])
+    combined_dataframe_with_svm_scores['score_predictions_svm'] = combined_dataframe_with_svm_scores['score_predictions_svm'].combine_first(dataframes_with_svm_scores[element+1]['score_predictions_svm'])
+    combined_dataframe_with_bayes_scores['score_predictions_bayes'] = combined_dataframe_with_bayes_scores['score_predictions_bayes'].combine_first(dataframes_with_bayes_scores[element+1]['score_predictions_bayes'])
 
 
+print('Printing final dataframe')
+print(combined_dataframe_with_logreg_scores.head())
+print(combined_dataframe_with_svm_scores.head())
+print(combined_dataframe_with_bayes_scores.head())
 
-  example = dataframe_from_numpy_train.head(1)
+# Print out the dataframe for investigation
+combined_dataframe_with_logreg_scores.to_csv('log_out_final_dataset.csv', index=False) 
+combined_dataframe_with_svm_scores.to_csv('svm_out_final_dataset.csv', index=False) 
+combined_dataframe_with_bayes_scores.to_csv('bayes_out_final_dataset.csv', index=False) 
 
-  # Build the input layer 
-  fc.input_layer(dict(example), feature_columns).numpy()
-  # Use entire batch since this is such a small dataset.                                                                                                   
-  NUM_EXAMPLES = len(y_train)
+matching_labels_logistic = combined_dataframe_with_logreg_scores[combined_dataframe_with_logreg_scores.target == combined_dataframe_with_logreg_scores.score_predictions_logistic]
+matching_labels_svm = combined_dataframe_with_svm_scores[combined_dataframe_with_svm_scores.target == combined_dataframe_with_svm_scores.score_predictions_svm]
 
-  # Training and evaluation input functions.                                                                                                               
-  #print("Defining the training function ...\n")
-  train_input_fn = make_input_fn(dataframe_from_numpy_train, y_train)
+print('Dataset component with matching labels to predictions')
+print(matching_labels_logistic.head(-1))
+print(matching_labels_svm.head(-1))
 
-  
+dftrain['score_predictions_logistic'] = combined_dataframe_with_logreg_scores['score_predictions_logistic'] 
+dftrain['score_predictions_svm'] = combined_dataframe_with_svm_scores['score_predictions_svm'] 
+dftrain['score_predictions_bayes'] = combined_dataframe_with_bayes_scores['score_predictions_bayes'] 
 
+print(dftrain.head(-1))
 
-
-  
-
-# Function used to train and test the BDT model with a given HP setting
-# The goal is to return accuracy and the hyperparameters setting associated to that
-#def train_validate_model_bdt():
-#  model_hp=dict(
-#  )
-
-  # Define the model
-#  est = tf.estimator.BoostedTreesClassifier(feature_columns,
-#                                            n_batches_per_layer = hparams[hp_scan_n_batches_per_layer],    
-#                                            n_trees = hparams[hp_scan_n_trees])                
-
-
-
-
-#  est = tf.estimator.BoostedTreesClassifier(feature_columns,
-#                                            n_batches_per_layer = hparams[hp_scan_n_batches_per_layer],    
-#                                            n_trees = hparams[hp_scan_n_trees],                
-#                                            max_depth = hparams[hp_scan_max_depth],          
-#                                            learning_rate = hparams[hp_scan_learning_rate],                
-#                                            l1_regularization = hparams[hp_scan_l1_regularization],                
-#                                            l2_regularization = hparams[hp_scan_l2_regularization],                
-#                                            tree_complexity = hparams[hp_scan_tree_complexity],                
-#                                            min_node_weight = hparams[hp_scan_min_node_weight],                
-#                                            center_bias = hparams[hp_scan_center_bias],                
-#                                            pruning_mode = hparams[hp_scan_pruning_mode],                
-#                                            quantile_sketch_epsilon = hparams[hp_scan_quantile_sketch_epsilon])                
-
-  # Train, on the given input function  
-  # The model will stop training once the specified number of trees is built, not 
-  # based on the number of steps.
-  # Cavieat: max_steps can give run time errors, attempting a few times before it actually works   
-#  est.train(input_fn=train_input_fn,max_steps=10)
-  # Test on the given test function 
-#  results_bdt = est.evaluate(eval_input_fn)
-#  return results_bdt['accuracy']
-
-# Function to run a given job and store the relvant info in a log file
-#def run(run_dir, hparams):
-#  with tf.summary.create_file_writer(run_dir).as_default():
-#    hp.hparams(hparams)  # Record the values used in this trial
-#    accuracy = train_validate_model(hparams)
-#    tf.summary.scalar(metric, accuracy, step=1)
-
-
-
-#train_validate_model_logreg(hparams):
-
-#train_validate_model_linear(hparams):
