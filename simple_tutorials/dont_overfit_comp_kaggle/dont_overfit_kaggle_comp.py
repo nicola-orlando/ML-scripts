@@ -22,10 +22,12 @@ from scipy.stats import uniform
 import pandas as pd
  
 from sklearn.model_selection import RandomizedSearchCV
+from sklearn import linear_model
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 from sklearn import linear_model
 from sklearn.ensemble import AdaBoostClassifier
+from sklearn import tree
 from sklearn.tree import DecisionTreeClassifier
 
 from sklearn.model_selection import RepeatedKFold
@@ -38,6 +40,7 @@ simplefilter(action='ignore', category=DeprecationWarning)
 
 # Configuration of the job, to be parsed from command line eventually
 number_of_folds=10
+is_verbose=False 
 
 # PART 1 design the dataset handling for 10-fold cross training
 # Now it's time to run, before then, split the dataset accroding to the cross training granularity we want to use 
@@ -122,23 +125,17 @@ def train_bayesian_rdge(X_train,y_train,X_test,y_test,full_dataframe,print_verbo
   return output_dataframe
 
 # https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html#sklearn.tree.DecisionTreeClassifier
-def train_validate_model_decision_tree(X_train,y_train,X_test,y_test,full_dataframe,print_verbose=True):
+def train_validate_model_decision_tree(X_train,y_train,X_test,y_test,full_dataframe,print_verbose=False):
   print("Training a DecisionTree model")
   # max_features currently set to None, can inspect this a little further   
-  
-  decision_tree = DecisionTreeClassifier(max_depth=1)
+  decision_tree = tree.DecisionTreeClassifier()
   # HP setting 
-  hp_setting = dict(criterion=['gini','entropy'],
-                    splitter=['best','random'],
-                    max_depth=[None,1,2,3,4],
-                    min_samples_split=[2,4,6,8,10,12,14,16,18,20,25,30,40],
-                    min_samples_leaf=[2,4,6,8,10,14,20,30],
-                    min_weight_fraction_leaf=[0.0],
-                    max_features=[None],
-                    random_state=[None],
-                    max_leaf_nodes=[None,10,20,30,40,50,60,70,80,90,100],
-                    min_impurity_decrease=uniform(loc=0, scale=1),
-                    min_impurity_split=uniform(loc=0, scale=50))
+  hp_setting = dict(criterion=['gini','entropy'], 
+                    splitter=['best','random'], 
+                    max_depth=[None,1,2,3,4], 
+                    min_samples_split=uniform(loc=0, scale=0.15),
+                    min_samples_leaf=uniform(loc=0, scale=0.1),
+                    max_leaf_nodes=[None,10,20,30,40,50,60,70,80,90,100]) 
   clf = RandomizedSearchCV(decision_tree,hp_setting,random_state=0)
   search = clf.fit(X_train,y_train)
   scores_train_prediction=search.predict(X_train)
@@ -153,7 +150,27 @@ def train_validate_model_decision_tree(X_train,y_train,X_test,y_test,full_datafr
   dataframe_with_scores = pd.DataFrame(data = score_predictions, columns = ['score_predictions_decision_tree'], index = X_test.index.copy())
   output_dataframe = pd.merge(full_dataframe, dataframe_with_scores, how = 'left', left_index = True, right_index = True)
   return output_dataframe
-  
+
+
+def train_validate_model_lasso(X_train,y_train,X_test,y_test,full_dataframe,print_verbose=False):
+  print("Training a Lasso model")
+  lasso_model = linear_model.Lasso()
+  hp_setting = dict(alpha=uniform(loc=0.001, scale=0.999))
+  clf = RandomizedSearchCV(lasso_model,hp_setting,random_state=0)
+  search = clf.fit(X_train,y_train)
+  scores_train_prediction=search.predict(X_train)
+  if print_verbose :
+    print('Best hp setting')
+    print(search.best_params_)
+    print('Printing predictions')
+    print(scores_train_prediction)
+    print('Printing random search results')
+    print(search.cv_results_)
+  score_predictions = search.predict(X_test)
+  dataframe_with_scores = pd.DataFrame(data = score_predictions, columns = ['score_predictions_lasso'], index = X_test.index.copy())
+  output_dataframe = pd.merge(full_dataframe, dataframe_with_scores, how = 'left', left_index = True, right_index = True)
+  return output_dataframe
+
 # Now we need to split the data, and call the runner for training/evaluating the model from the splitting look  
 X = dftrain.to_numpy()
 
@@ -164,19 +181,14 @@ random_state = 12883823
 fold_count=0
 dataframes_with_logreg_scores=[]
 dataframes_with_svm_scores=[]
+dataframes_with_lasso_scores=[]
 dataframes_with_decision_tree_scores=[]
 dataframes_with_bayes_scores=[]
 repeated_k_fold = RepeatedKFold(n_splits=number_of_folds, n_repeats=1, random_state=random_state)
+
 for train_index, test_index in repeated_k_fold.split(X):
   fold_count+=1
   print("Processing fold count ",fold_count)
-
-  # Input layer, need to define feature_column 
-  fc = tf.feature_column
-  feature_columns = []
-  # Loop over all features
-  for index in range(0,300) :
-    feature_columns.append(fc.numeric_column(str(index),dtype=tf.float32))
 
   # Converting to dataframe
   # values, 1st column as index
@@ -189,50 +201,61 @@ for train_index, test_index in repeated_k_fold.split(X):
   
   dataframe_with_logreg_scores = train_validate_model_logreg(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain)
   dataframe_with_svm_scores = train_validate_model_svm(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain)
+  dataframe_with_lasso_scores = train_validate_model_lasso(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain)
   dataframe_with_decision_tree_scores = train_validate_model_decision_tree(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain)
   dataframe_with_bayes_scores = train_bayesian_rdge(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain)
 
   dataframes_with_logreg_scores.append(dataframe_with_logreg_scores)
   dataframes_with_svm_scores.append(dataframe_with_svm_scores)
+  dataframes_with_lasso_scores.append(dataframe_with_lasso_scores)
   dataframes_with_decision_tree_scores.append(dataframe_with_decision_tree_scores)
   dataframes_with_bayes_scores.append(dataframe_with_bayes_scores)
 
 combined_dataframe_with_logreg_scores = dataframes_with_logreg_scores[0]
 combined_dataframe_with_svm_scores = dataframes_with_svm_scores[0]
+combined_dataframe_with_lasso_scores = dataframes_with_lasso_scores[0]
 combined_dataframe_with_decision_tree_scores = dataframes_with_decision_tree_scores[0]
 combined_dataframe_with_bayes_scores = dataframes_with_bayes_scores[0]
 
 for element in range(0,number_of_folds-1):
     combined_dataframe_with_logreg_scores['score_predictions_logistic'] = combined_dataframe_with_logreg_scores['score_predictions_logistic'].combine_first(dataframes_with_logreg_scores[element+1]['score_predictions_logistic'])
     combined_dataframe_with_svm_scores['score_predictions_svm'] = combined_dataframe_with_svm_scores['score_predictions_svm'].combine_first(dataframes_with_svm_scores[element+1]['score_predictions_svm'])
+    combined_dataframe_with_lasso_scores['score_predictions_lasso'] = combined_dataframe_with_lasso_scores['score_predictions_lasso'].combine_first(dataframes_with_lasso_scores[element+1]['score_predictions_lasso'])
     combined_dataframe_with_decision_tree_scores['score_predictions_decision_tree'] = combined_dataframe_with_decision_tree_scores['score_predictions_decision_tree'].combine_first(dataframes_with_decision_tree_scores[element+1]['score_predictions_decision_tree'])
     combined_dataframe_with_bayes_scores['score_predictions_bayes'] = combined_dataframe_with_bayes_scores['score_predictions_bayes'].combine_first(dataframes_with_bayes_scores[element+1]['score_predictions_bayes'])
 
-print('Printing final dataframe')
-print(combined_dataframe_with_logreg_scores.head())
-print(combined_dataframe_with_svm_scores.head())
-print(combined_dataframe_with_decision_tree_scores.head())
-print(combined_dataframe_with_bayes_scores.head())
+if is_verbose: 
+  print('Printing final dataframe')
+  print(combined_dataframe_with_logreg_scores.head())
+  print(combined_dataframe_with_svm_scores.head())
+  print(combined_dataframe_with_lasso_scores.head())
+  print(combined_dataframe_with_decision_tree_scores.head())
+  print(combined_dataframe_with_bayes_scores.head())
 
 # Print out the dataframe for investigation
 combined_dataframe_with_logreg_scores.to_csv('log_out_final_dataset.csv', index=False) 
 combined_dataframe_with_svm_scores.to_csv('svm_out_final_dataset.csv', index=False) 
+combined_dataframe_with_lasso_scores.to_csv('lasso_out_final_dataset.csv', index=False) 
 combined_dataframe_with_decision_tree_scores.to_csv('decision_tree_out_final_dataset.csv', index=False) 
 combined_dataframe_with_bayes_scores.to_csv('bayes_out_final_dataset.csv', index=False) 
 
 matching_labels_logistic = combined_dataframe_with_logreg_scores[combined_dataframe_with_logreg_scores.target == combined_dataframe_with_logreg_scores.score_predictions_logistic]
 matching_labels_svm = combined_dataframe_with_svm_scores[combined_dataframe_with_svm_scores.target == combined_dataframe_with_svm_scores.score_predictions_svm]
+matching_labels_lasso = combined_dataframe_with_lasso_scores[combined_dataframe_with_lasso_scores.target == combined_dataframe_with_lasso_scores.score_predictions_lasso]
 matching_labels_decision_tree = combined_dataframe_with_decision_tree_scores[combined_dataframe_with_decision_tree_scores.target == combined_dataframe_with_decision_tree_scores.score_predictions_decision_tree]
 
-print('Dataset component with matching labels to predictions')
-print(matching_labels_logistic.head(-1))
-print(matching_labels_svm.head(-1))
-print(matching_labels_decision_tree.head(-1))
+if is_verbose:
+  print('Dataset component with matching labels to predictions')
+  print(matching_labels_logistic.head(-1))
+  print(matching_labels_svm.head(-1))
+  print(matching_labels_lasso.head(-1))
+  print(matching_labels_decision_tree.head(-1))
 
 dftrain['score_predictions_logistic'] = combined_dataframe_with_logreg_scores['score_predictions_logistic'] 
 dftrain['score_predictions_svm'] = combined_dataframe_with_svm_scores['score_predictions_svm'] 
+dftrain['score_predictions_lasso'] = combined_dataframe_with_lasso_scores['score_predictions_lasso'] 
 dftrain['score_predictions_decision_tree'] = combined_dataframe_with_decision_tree_scores['score_predictions_decision_tree'] 
 dftrain['score_predictions_bayes'] = combined_dataframe_with_bayes_scores['score_predictions_bayes'] 
 
-print(dftrain.head(-1))
+print(dftrain.head(5))
 
