@@ -23,5 +23,5 @@ https://www.kaggle.com/c/dont-overfit-ii/overview
 **Notes on don't overfit** 
 
 * https://www.kaggle.com/rafjaa/dealing-with-very-small-datasets (including features elimination model from sklearn.feature_selection import RFE)
-* Dataset augmentation SMOTE (Synthetic Minority Oversampling TEchnique) 
+* Dataset augmentation SMOTE (Synthetic Minority Oversampling TEchnique): https://arxiv.org/abs/1106.1813  
 
