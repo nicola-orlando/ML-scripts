@@ -14,7 +14,7 @@ Link on Kaggle https://www.kaggle.com/c/titanic | Folder titanic_comp_kaggle/
 
 Dataset http://archive.ics.uci.edu/ml/datasets/Online+Retail+II | Folder simple_customers_analysis/
 
-* customers_insights_online_retail.py | contains all relevant functins for plotting and dataframe manipulation 
+* customers_insights_online_retail.py | contains all relevant functions for plotting and dataframe manipulation 
 
 ## Low statisitcs challenge 
 
