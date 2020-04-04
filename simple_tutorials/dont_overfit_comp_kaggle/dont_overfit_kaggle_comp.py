@@ -18,6 +18,7 @@ tf.set_random_seed(123)
 from keras.layers import Input, Flatten, Dense, Dropout
 from keras.models import Model
 from scipy.stats import uniform
+from collections import Counter
 
 import pandas as pd
  
@@ -227,6 +228,9 @@ for train_index, test_index in repeated_k_fold.split(X):
   y_train = dataframe_from_numpy_train.pop('target')
   y_test = dataframe_from_numpy_test.pop('target')
 
+  print('Count the data split by class')
+  print(Counter(y_test))
+ 
   dataframe_with_logreg_scores = train_validate_model_logreg(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain,str(fold_count))
   dataframe_with_svm_linear_scores = train_validate_model_svm(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain,str(fold_count),'linear')
   dataframe_with_svm_pol_scores = train_validate_model_svm(dataframe_from_numpy_train,y_train,dataframe_from_numpy_test,y_test,dftrain,str(fold_count),'poly')
