@@ -1,4 +1,4 @@
-# tensorflow scripts
+# Scripts for ML applications
 Collection of python scripts for ML and data manipulation tasks. More information is written donw the in header of each script.  
 
 ## Scripts to analyse titanic dataset 
@@ -19,3 +19,11 @@ Dataset http://archive.ics.uci.edu/ml/datasets/Online+Retail+II | Folder simple_
 ## Low statisitcs challenge 
 
 Dataset on kaggle https://www.kaggle.com/c/dont-overfit-ii/overview | Folder https://github.com/nicola-orlando/tensorflow/tree/master/simple_tutorials/dont_overfit_comp_kaggle 
+
+## Covid-19 Roche Kaggle challenge 
+
+Ongoing https://www.kaggle.com/roche-data-science-coalition/uncover
+
+## House Prices: Advanced Regression Techniques Kaggle challenge 
+
+Ongoing https://www.kaggle.com/c/house-prices-advanced-regression-techniques/overview 
